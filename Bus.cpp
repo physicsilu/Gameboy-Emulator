@@ -9,6 +9,7 @@ Bus:: Bus(){
         itr = 0x00; // We can represent hex numbers like this in cpp
     }
     
+    cpu.ConnectBus(this);
 }
 
 Bus:: ~Bus(){
