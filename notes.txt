@@ -192,3 +192,9 @@ Say we have LDA $41  -> This is a 2 byte instruction
 We have to keep in mind about the incremental of the PC based on these cases.
 For a given instruction we have to emulate its -> Function, Address Mode, #clock cycles
 
+***********Sequence of events********
+1) Read byte @ PC
+2) OPCODE[BYTE] -> Addressing Mode, cycles
+3) Read 0,1 or 2 more bytes
+4) Execute
+5) Wait, Count Cycles, Complete
