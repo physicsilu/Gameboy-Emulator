@@ -1,0 +1,194 @@
+Here, we are going to build a NES Emulator!
+
+javidx9 YouTube channel is followed for building this. I am not yet smart enough to build one on my own hehe...
+
+*******REPRESENTING NUMBERS*********
+Emulation is all about representing the hardware. 
+Hardware has a bunch of transistors and capacitors and they don't understand decimal numbers 
+So, we need binary representation of the numbers.
+
+(65)base10 = (01000001)base2
+
+Binary is good for computers but horrible for humans.
+If the register size increases, it'll be complicated to understand.
+So, we use Hexadecimal System (HEX)
+(0110000110011110)base2 = (619E)base16
+
+Representation in C++
+DECIMAL: 65
+BINARY: 0b01000001
+HEXADECIMAL: 0x41, $41, #41 
+
+*******BITWISE OPERATIONS********
+Why don't we just use the decimal numbers?
+See, we've studied that 'char' is an 8-bit number, like that's how it's stored in computer.
+But what do those 8 bits correspond to?
+[0:2] bits might be some value with 0-7 range
+[3:4] bits might represent a state
+[5:6] might be some switches
+[7] bit might be just there. Like not useful, but as the memory is byte organised, we need that
+
+While building an emulator, I should be able to extract the useful parts of the binary representation.
+
+We need bitwise operations to extract this data
+Say, we want the bottom 3 bits from the 8-bit number. We can just mask the other bits.
+That is, do a "bitwise and" between the data and 00000111. This'll give us bottom 3 bits of data.
+
+If we want to extract some bits in between, then we can use the mask and "shift the bits" for getting the information
+
+So, we use bitwise and (&) to EXTRACT data
+    we use bitwise or (|) to SET the bits
+    we use bitwise xor (^) to TOGGLE bit
+    we use bitwise not (~) to INVERT the bits
+    we use shift right (>>) and shift left (<<) to shift the bits (multiply and divide by 2)
+
+*******BIT FIELDS********
+C++ provides some struct like thingy where we can allocate particular no of bits for a datatype
+Ex: struct{
+    char unused: 1;
+    char sw2   : 1;
+    char sw1   : 1;
+    char state : 2;
+    char value : 3;
+}
+We can do something like A.value = 4; etc etc
+
+UNION{
+   struct{
+    char unused: 1;
+    char sw2   : 1;
+    char sw1   : 1;
+    char state : 2;
+    char value : 3;
+    }
+
+    char reg; 
+}
+By using unions, we can do A.reg = 0x00; and A.value = 4; etc etc
+
+**********Memory Layout for the bit field************
+struct Flags {
+    unsigned int flag1 : 1;  // 1 bit
+    unsigned int flag2 : 3;  // 3 bits
+    unsigned int flag3 : 4;  // 4 bits
+};
+
+Bits:   | flag3 (4 bits) | flag2 (3 bits) | flag1 (1 bit) | (remaining 24 bits unused) |
+Word:   |    32 bits total (fits in a single word)       |
+
+
+***************NES Architecture***************
+
++---------------------------------------------------------+
+|                  NES High-Level Architecture            |
++---------------------------------------------------------+
+|                       CPU (Ricoh 2A03/2A07)             |
+| - 6502-based core                                       |
+| - APU (Audio Processing Unit)                           |
+| - Address Bus (16-bit)                                  |
+| - Data Bus (8-bit)                                      |
+| - Clock: ~1.79 MHz (NTSC) / ~1.66 MHz (PAL)             |
++-------------------------------+-------------------------+
+                                |
+                                |
++----------------+     +-------------------+   +-------------------+
+| System RAM     |<----| Address Decoder   |-->| Memory-mapped I/O |
+| 2KB            |     |                   |   | Controllers/Input |
+| $0000-$07FF    |     | Maps memory to    |   | $4016-$4017       |
++----------------+     | the CPU's buses   |   +-------------------+
+                                |
++----------------+     +-------------------+   +-------------------+
+| PPU Registers  |<----| PPU Address Bus   |-->| Cartridge PRG-ROM |
+| $2000-$2007    |     | 16-bit            |   | $8000-$FFFF       |
+| PPU Control    |     |                   |   | Program memory    |
++----------------+     |                   |   +-------------------+
+                                |
++----------------+     +-------------------+   +-------------------+
+| APU Registers  |<----| CPU Bus Control   |-->| Cartridge CHR-ROM |
+| $4000-$4015    |     | Logic (Mirroring  |   | Character memory  |
+| Sound Channels |     | and Mapping)      |   |                   |
++----------------+     +-------------------+   +-------------------+
+                                |
+                                |
++---------------------------------------------------------+
+|              Picture Processing Unit (PPU)              |
+| - Handles graphics rendering                            |
+| - Address Bus (14-bit for VRAM)                         |
+| - Palette RAM ($3F00-$3FFF)                             |
+| - Sprite Memory (OAM - Object Attribute Memory)         |
+| - Outputs to video encoder                              |
++---------------------------------------------------------+
+                                |
+                                |
++---------------------------------------------------------+
+| Cartridge Slot                                          |
+| - PRG-ROM (Program Data)                                |
+| - CHR-ROM (Character Data)                              |
+| - Optional Mapper Hardware                              |
++---------------------------------------------------------+
+                                |
++---------------------------------------------------------+
+| Output to TV                                            |
+| - Composite Video                                       |
+| - Mono Audio                                            |
++---------------------------------------------------------+
+
+*************6502 CPU***********
+- The CPU will output the address (16 bit address in 6502's case)
+- Data can be read or written by the CPU (byte transfer, 8 bits at a time in 6502's case)
+- So, we need a read/write indicator for the data
+- Clock input is taken by the CPU
+
++------------------+            +----------------+            +----------------+            +----------------+            +----------------+
+|    6502 CPU      |<==========>| $0000-$07FF    |<==========>| $0800-$0BFF    |<==========>| $0C00-$0FFF    |<==========>| $1000-$FFFF    |
+|  (A = Address    |            | (2KB RAM)      |            | (Mirroring?)   |            | (Mirroring?)   |            | (Cartridge?)   |
+|   D = Data)      |            |                |            |                |            |                |            |                |
++------------------+            +----------------+            +----------------+            +----------------+            +----------------+
+    ^   ^
+    |   |
+    |   | Address Bus (A): 16-bit (used to address memory locations)
+    | Data Bus (D): 8-bit (used to transfer data between CPU and memory/peripherals)
+
+===============================================================
+|                            BUS                              |
+===============================================================
+Range: 0x0000 - 0xFFFF
+
+1. CPU (6502)
+
+The CPU processes instructions and communicates with memory using:
+A 16-bit address bus (A) for addressing memory locations.
+An 8-bit data bus (D) for reading or writing data.
+
+2. Memory Map
+
+Memory is divided into sections, each mapped to specific address ranges.
+$0000-$07FF: 2KB of internal RAM (accessible directly by the CPU).
+$0800-$0FFF: These ranges are often mirrors (repeats) of the internal RAM due to the limited physical memory.
+$1000-$FFFF: This range may include other components like Cartridge PRG-ROM (Program Data) or memory-mapped registers for input/output.
+
+3. Bus
+
+The CPU communicates with memory and peripherals over a shared bus, which combines the address and data buses.
+
+In this video/ series, the guy assumes that there's only one device called RAM.
+The RAM is mapped from $0000 to $FFFF.
+
+The 6502 has various registers. They are:
+- A: Accumulator -> 8 bit register
+- X: Register -> 8 bit
+- Y: Register -> 8 bit
+- stkp: Stack Pointer -> It is an 8 bit number that points somewhere in memory. It increases or decreases based on PUSH/ POP operations.
+- PC: Program Counter -> This holds the address of the location where the next instruction the CPU should go to. Its a 16 bit number.
+- Status: Status register -> It has various bits that allows to interrrogate the state of CPU. 
+    Like, was the last result zero? Has there been a carry operation etc. Overall, it's an 8 bit register
+
+The point we have to note here is that, not all instructions of 6502 are of same size. And they won't necessarily take same time.
+There are 56 legal instructions for 6502. (Basically ISA)
+
+Say we have LDA $41  -> This is a 2 byte instruction
+            LDA $0105 -> This is a 3 byte instruction
+            CLC      -> This is a 1 byte instruction
+We have to keep in mind about the incremental of the PC based on these cases.
+For a given instruction we have to emulate its -> Function, Address Mode, #clock cycles
+
